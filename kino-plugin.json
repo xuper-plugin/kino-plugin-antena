@@ -1,26 +1,51 @@
 {
   "id": "antena",
   "name": "Antena",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "apiVersion": 6,
   "entry": "plugin.js",
   "description": "Tu TV en vivo: canales y guía de programación desde cualquier servidor Xtream Codes.",
-  "hosts": [],
+  "hosts": [
+    "raw.githubusercontent.com"
+  ],
   "capabilities": ["channels", "home", "search", "resolve"],
   "liveStreamHosts": "any",
   "categories": ["live"],
   "color": "#1A73E8",
+  "secrets": {
+    "serverKey": {
+      "seal": "kino-sealed:v1:pw6Sc-3_tJ0NN2fHU2JtmwtSZRj8CMzEkltIgGvsPiroCssfIvqL8vw5W6ljHNoFE0pONb1oJzQQ61k_DR821ynq7xFiie6WhGQPoqOQLZHk3D2Aq91YuUeQxy0",
+      "use": "cipher-key",
+      "encoding": "hex"
+    }
+  },
   "settings": [
+    {
+      "key": "modeSection",
+      "type": "section",
+      "label": "Modo"
+    },
+    {
+      "key": "mode",
+      "type": "select",
+      "label": "Fuente del servidor",
+      "default": "auto",
+      "options": [
+        { "value": "auto", "label": "Automático (recomendado)" },
+        { "value": "custom", "label": "Mi propio servidor" }
+      ],
+      "hint": "Automático usa servidores preconfigurados. Con tu propio servidor introduce los datos abajo."
+    },
     {
       "key": "serverSection",
       "type": "section",
-      "label": "Servidor"
+      "label": "Servidor propio"
     },
     {
       "key": "server",
       "type": "url",
       "label": "URL del servidor",
-      "hint": "Ejemplo: http://miiptv.com:8880"
+      "hint": "Solo en modo Servidor propio. Ej: http://miiptv.com:8880"
     },
     {
       "key": "username",
