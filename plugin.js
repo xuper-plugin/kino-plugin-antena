@@ -372,7 +372,7 @@ function b64text(s) {
 export async function guide({ channelIds, from, to }) {
   const cur = await ensureCred();
   const tg = tagOf(cur.server);
-  const ids = (channelIds || []).map((id) => /^c([0-9a-z]{2})_(\d+)$/.exec(String(id))).filter((m) => m && m[1] === tg).slice(0, 30);
+  const ids = (channelIds || []).map((id) => /^c([0-9a-z]{2})_(\d+)$/.exec(String(id))).filter((m) => m && m[1] === tg).slice(0, 20);
   const out = [];
   let failed = false;
   for (let i = 0; i < ids.length && !failed; i += 6) {
@@ -396,15 +396,50 @@ export async function guide({ channelIds, from, to }) {
 
 // ---- 9. resolve and search ---------------------------------------------------------------------------------------
 
+async function playable(url) {
+  try {
+    const r = await kino.fetch(url, { redirect: "manual", timeoutMs: 6000 });
+    return r.status >= 200 && r.status < 400;
+  } catch { return false; }
+}
+
+async function alternate(tag, build, current) {
+  let files;
+  try {
+    const r = await kino.fetch(INDEX_URL, { timeoutMs: 10000 });
+    const idx = r.json();
+    files = Array.isArray(idx && idx.files) ? idx.files.slice().sort(() => Math.random() - 0.5) : [];
+  } catch { return null; }
+  let tried = 0;
+  for (const url of files.slice(0, 3)) {
+    let accounts;
+    try { accounts = (await kino.fetch(url, { timeoutMs: 15000 })).json(); } catch { continue; }
+    if (!Array.isArray(accounts)) continue;
+    const pool = accounts.filter((e) => e && e.s && e.u && e.p && tagOf(e.s) === tag && notExpired(e)).sort(() => Math.random() - 0.5);
+    for (const e of pool) {
+      if (tried >= 6) return null;
+      const username = dec(e.u), password = dec(e.p);
+      if (!username || !password || username === current.username) continue;
+      tried++;
+      const cand = { server: e.s, username, password };
+      if (await playable(build(cand))) return cand;
+    }
+  }
+  return null;
+}
+
 export async function resolve(ref) {
   const m = /^live:(?:([0-9a-z]{2}):)?(\d+)$/.exec(String(ref));
   if (!m) throw kino.error("not_found", "ref", { userMessage: t("unknownRef") });
-  const { server, username, password } = m[1] ? await useServer(m[1]) : await ensureCred();
+  const c = m[1] ? await useServer(m[1]) : await ensureCred();
   const ext = liveExt();
-  return {
-    url: `${server}/live/${urlEnc(username)}/${urlEnc(password)}/${m[2]}.${ext}`,
-    mime: ext === "ts" ? "video/mp2t" : "application/x-mpegURL",
-  };
+  const build = (a) => `${a.server}/live/${urlEnc(a.username)}/${urlEnc(a.password)}/${m[2]}.${ext}`;
+  let pick = c;
+  if (isAuto() && !(await playable(build(c)))) {
+    const alt = await alternate(tagOf(c.server), build, c);
+    if (alt) { pick = alt; saveCred(alt.server, alt.username, alt.password); }
+  }
+  return { url: build(pick), mime: ext === "ts" ? "video/mp2t" : "application/x-mpegURL" };
 }
 
 function liveItem(c) {
