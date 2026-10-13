@@ -126,8 +126,8 @@ async function memCache(key, ttl, fn) {
   return v;
 }
 
-async function cachedCats(fn) {
-  const raw = kino.storage.get(CATS_KEY);
+async function cachedCats(key, fn) {
+  const raw = kino.storage.get(key);
   if (raw) {
     try {
       const e = JSON.parse(raw);
@@ -136,14 +136,11 @@ async function cachedCats(fn) {
   }
   const v = await fn();
   const text = JSON.stringify({ at: Date.now(), v });
-  if (text.length < 32 * 1024) try { kino.storage.set(CATS_KEY, text); } catch { /* full */ }
+  if (text.length < 32 * 1024) try { kino.storage.set(key, text); } catch { /* full */ }
   return v;
 }
 
-function flushCache() {
-  MEM.clear();
-  try { kino.storage.set(CATS_KEY, ""); } catch { /* ok */ }
-}
+function flushCache() { MEM.clear(); }
 
 // ---- 5. API ------------------------------------------------------------------------------------------------------
 
@@ -170,14 +167,23 @@ async function callApi(server, username, password, action, params = {}, ms = 200
   return data;
 }
 
+async function ensureCred() {
+  const c = creds();
+  if (c.server && c.username && c.password) return c;
+  if (!isAuto()) throw kino.error("auth_required", "not configured", { userMessage: t("notConfigured") });
+  return findAccount();
+}
+
 async function api(action, params = {}, ms = 20000) {
-  let { server, username, password } = creds();
-  if (!server || !username || !password) {
-    if (!isAuto()) throw kino.error("auth_required", "not configured", { userMessage: t("notConfigured") });
-    const found = await findAccount();
-    server = found.server; username = found.username; password = found.password;
+  const c = await ensureCred();
+  try {
+    return await callApi(c.server, c.username, c.password, action, params, ms);
+  } catch (e) {
+    if (!isAuto()) throw e;
+    clearCred(); flushCache();
+    const f = await findAccount();
+    return callApi(f.server, f.username, f.password, action, params, ms);
   }
-  return callApi(server, username, password, action, params, ms);
 }
 
 async function lst(action, params, ms) {
@@ -209,6 +215,8 @@ async function tryFile(url, limit = 15) {
     if (!username || !password) continue;
     try {
       await callApi(server, username, password, "", {}, 8000);
+      const cats = await callApi(server, username, password, "get_live_categories", {}, 10000);
+      if (!Array.isArray(cats) || !cats.length) continue;
       return { server, username, password };
     } catch { /* try next */ }
   }
@@ -255,7 +263,10 @@ function genreOf(name) {
 }
 
 function httpUrl(v) { return typeof v === "string" && /^https?:\/\//.test(v) ? v : undefined; }
-function catsRaw() { return cachedCats(() => lst("get_live_categories")); }
+async function catsRaw() {
+  const { server } = await ensureCred();
+  return cachedCats(CATS_KEY + ":" + server, () => lst("get_live_categories"));
+}
 
 async function adultIds() {
   const ids = new Set();
@@ -350,12 +361,7 @@ export async function guide({ channelIds, from, to }) {
 // ---- 9. resolve and search ---------------------------------------------------------------------------------------
 
 export async function resolve(ref) {
-  let { server, username, password } = creds();
-  if (!server || !username || !password) {
-    if (!isAuto()) throw kino.error("auth_required", "not configured", { userMessage: t("notConfigured") });
-    const found = await findAccount();
-    server = found.server; username = found.username; password = found.password;
-  }
+  const { server, username, password } = await ensureCred();
   const m = /^live:(\d+)$/.exec(String(ref));
   if (!m) throw kino.error("not_found", "ref", { userMessage: t("unknownRef") });
   const ext = liveExt();
