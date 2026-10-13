@@ -14,6 +14,7 @@
   "liveStreamHosts": "any",
   "categories": ["live"],
   "color": "#1A73E8",
+  "discoverable": false,
   "secrets": {
     "serverKey": {
       "seal": "kino-sealed:v1:pw6Sc-3_tJ0NN2fHU2JtmwtSZRj8CMzEkltIgGvsPiroCssfIvqL8vw5W6ljHNoFE0pONb1oJzQQ61k_DR821ynq7xFiie6WhGQPoqOQLZHk3D2Aq91YuUeQxy0",
