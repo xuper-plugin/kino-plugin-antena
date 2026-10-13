@@ -1,7 +1,7 @@
 {
   "id": "antena",
   "name": "Antena",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "apiVersion": 6,
   "entry": "plugin.js",
   "description": "Tu TV en vivo: canales y guía de programación desde cualquier servidor Xtream Codes.",

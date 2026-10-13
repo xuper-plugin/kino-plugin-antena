@@ -181,7 +181,7 @@ async function api(action, params = {}, ms = 20000) {
   } catch (e) {
     if (!isAuto()) throw e;
     clearCred(); flushCache();
-    const f = await findAccount();
+    const f = await findAccount(tagOf(c.server)).catch(() => findAccount());
     return callApi(f.server, f.username, f.password, action, params, ms);
   }
 }
@@ -193,12 +193,35 @@ async function lst(action, params, ms) {
 
 // ---- auto mode: find a working account ---------------------------------------------------------------------------
 
+function tagOf(server) {
+  let h = 0;
+  for (const ch of String(server)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return (h % 1296).toString(36).padStart(2, "0");
+}
+
+async function useServer(tag) {
+  const c = creds();
+  if (c.server && c.username && c.password && (tagOf(c.server) === tag || !isAuto())) return c;
+  try { return await findAccount(tag); } catch { return ensureCred(); }
+}
+
 function notExpired(entry) {
   if (!entry || typeof entry.e !== "number") return true;
   return Date.now() < entry.e * 1000;
 }
 
-async function tryFile(url, limit = 15) {
+async function streams(server, username, password, categoryId) {
+  try {
+    const list = await callApi(server, username, password, "get_live_streams", { category_id: categoryId }, 12000);
+    for (const x of (Array.isArray(list) ? list : []).slice(0, 3)) {
+      const r = await kino.fetch(`${server}/live/${urlEnc(username)}/${urlEnc(password)}/${x.stream_id}.m3u8`, { redirect: "manual", timeoutMs: 8000 });
+      if (r.status >= 200 && r.status < 400) return true;
+    }
+  } catch { /* not usable */ }
+  return false;
+}
+
+async function tryFile(url, tag, limit = 8) {
   let accounts;
   try {
     const r = await kino.fetch(url, { timeoutMs: 15000 });
@@ -209,21 +232,22 @@ async function tryFile(url, limit = 15) {
   const pool = accounts.slice().sort(() => Math.random() - 0.5);
   for (const entry of pool.slice(0, limit)) {
     if (!entry || !entry.s || !entry.u || !entry.p || !notExpired(entry)) continue;
+    if (tag && tagOf(entry.s) !== tag) continue;
     const server = entry.s;
     const username = dec(entry.u);
     const password = dec(entry.p);
     if (!username || !password) continue;
     try {
-      await callApi(server, username, password, "", {}, 8000);
       const cats = await callApi(server, username, password, "get_live_categories", {}, 10000);
       if (!Array.isArray(cats) || !cats.length) continue;
+      if (!(await streams(server, username, password, cats[0].category_id))) continue;
       return { server, username, password };
     } catch { /* try next */ }
   }
   return null;
 }
 
-async function findAccount() {
+async function findAccount(tag) {
   let files;
   try {
     const r = await kino.fetch(INDEX_URL, { timeoutMs: 10000 });
@@ -236,7 +260,7 @@ async function findAccount() {
   }
   const shuffled = files.slice().sort(() => Math.random() - 0.5);
   for (const url of shuffled) {
-    const found = await tryFile(url);
+    const found = await tryFile(url, tag);
     if (found) { saveCred(found.server, found.username, found.password); flushCache(); return found; }
   }
   throw kino.error("unavailable", "no account", { userMessage: t("autoFailed") });
@@ -274,13 +298,13 @@ async function adultIds() {
   return ids;
 }
 
-function buildChannel(c, adult) {
+function buildChannel(c, adult, tg) {
   const catId = String(c.category_id || "");
   const n = parseInt(c.num, 10);
   return {
-    id: "c" + safeId(c.stream_id),
+    id: "c" + tg + "_" + safeId(c.stream_id),
     title: clean(c.name, c.stream_id, 200),
-    ref: "live:" + c.stream_id,
+    ref: "live:" + tg + ":" + c.stream_id,
     categoryId: ID.test(catId) ? catId : undefined,
     logo: httpUrl(c.stream_icon),
     number: n > 0 && n <= 9999 ? n : undefined,
@@ -291,9 +315,11 @@ function buildChannel(c, adult) {
 // ---- 7. live exports ---------------------------------------------------------------------------------------------
 
 export async function liveCategories() {
+  const { server } = await ensureCred();
+  const tg = tagOf(server);
   const cats = await catsRaw();
   return cats.filter((c) => ID.test(String(c.category_id))).map((c) => ({
-    id: String(c.category_id),
+    id: tg + "_" + String(c.category_id),
     title: clean(c.category_name, c.category_id, 100),
     genre: genreOf(c.category_name),
     adult: adultName(c.category_name),
@@ -301,23 +327,29 @@ export async function liveCategories() {
 }
 
 export async function liveChannels({ categoryId, cursor }) {
+  const m = /^([0-9a-z]{2})_(.+)$/.exec(String(categoryId));
+  const cat = m ? m[2] : String(categoryId);
+  const c = m ? await useServer(m[1]) : await ensureCred();
+  const tg = tagOf(c.server);
   const [all, adult] = await Promise.all([
-    memCache("live:" + categoryId, TTL_CH, () => lst("get_live_streams", { category_id: categoryId })),
+    memCache("live:" + tg + ":" + cat, TTL_CH, () => lst("get_live_streams", { category_id: cat })),
     adultIds(),
   ]);
   const PAGE = 500, off = Math.max(0, parseInt(cursor, 10) || 0);
   return {
-    items: all.slice(off, off + PAGE).map((c) => buildChannel(c, adult)),
+    items: all.slice(off, off + PAGE).map((ch) => buildChannel(ch, adult, tg)),
     next: off + PAGE < all.length ? String(off + PAGE) : undefined,
   };
 }
 
 async function findChannels(q, max) {
+  const { server } = await ensureCred();
+  const tg = tagOf(server);
   const [all, adult] = await Promise.all([
-    memCache("live-all", TTL_CH, () => lst("get_live_streams", {}, 28000)),
+    memCache("live-all:" + tg, TTL_CH, () => lst("get_live_streams", {}, 28000)),
     adultIds(),
   ]);
-  return all.filter((c) => String(c.name || "").toLowerCase().includes(q)).slice(0, max).map((c) => buildChannel(c, adult));
+  return all.filter((c) => String(c.name || "").toLowerCase().includes(q)).slice(0, max).map((c) => buildChannel(c, adult, tg));
 }
 
 export async function liveSearch({ query }) {
@@ -338,35 +370,39 @@ function b64text(s) {
 }
 
 export async function guide({ channelIds, from, to }) {
-  const ids = (channelIds || []).filter((id) => /^c\d+$/.test(id)).slice(0, 50);
-  const perChannel = await Promise.all(ids.map(async (id) => {
-    try {
-      const data = await api("get_short_epg", { stream_id: id.slice(1), limit: 12 }, 12000);
-      const rows = data && Array.isArray(data.epg_listings) ? data.epg_listings : [];
-      const out = [];
-      for (const p of rows) {
-        const start = parseInt(p.start_timestamp, 10) * 1000;
-        const end = parseInt(p.stop_timestamp, 10) * 1000;
-        const title = b64text(p.title).trim();
-        if (!(start > 0 && end > start && title) || end < from || start > to) continue;
-        const description = b64text(p.description).trim();
-        out.push({ channelId: id, title: title.slice(0, 200), start, end, ...(description ? { description: description.slice(0, 500) } : {}) });
-      }
-      return out;
-    } catch (e) { kino.log("guide: " + (e && e.code)); return []; }
-  }));
-  return perChannel.flat();
+  const cur = await ensureCred();
+  const tg = tagOf(cur.server);
+  const ids = (channelIds || []).map((id) => /^c([0-9a-z]{2})_(\d+)$/.exec(String(id))).filter((m) => m && m[1] === tg).slice(0, 30);
+  const out = [];
+  let failed = false;
+  for (let i = 0; i < ids.length && !failed; i += 6) {
+    await Promise.all(ids.slice(i, i + 6).map(async (m) => {
+      try {
+        const data = await callApi(cur.server, cur.username, cur.password, "get_short_epg", { stream_id: m[2], limit: 12 }, 10000);
+        const rows = data && Array.isArray(data.epg_listings) ? data.epg_listings : [];
+        for (const p of rows) {
+          const start = parseInt(p.start_timestamp, 10) * 1000;
+          const end = parseInt(p.stop_timestamp, 10) * 1000;
+          const title = b64text(p.title).trim();
+          if (!(start > 0 && end > start && title) || end < from || start > to) continue;
+          const description = b64text(p.description).trim();
+          out.push({ channelId: m[0], title: title.slice(0, 200), start, end, ...(description ? { description: description.slice(0, 500) } : {}) });
+        }
+      } catch (e) { failed = true; kino.log("guide: " + (e && e.code)); }
+    }));
+  }
+  return out;
 }
 
 // ---- 9. resolve and search ---------------------------------------------------------------------------------------
 
 export async function resolve(ref) {
-  const { server, username, password } = await ensureCred();
-  const m = /^live:(\d+)$/.exec(String(ref));
+  const m = /^live:(?:([0-9a-z]{2}):)?(\d+)$/.exec(String(ref));
   if (!m) throw kino.error("not_found", "ref", { userMessage: t("unknownRef") });
+  const { server, username, password } = m[1] ? await useServer(m[1]) : await ensureCred();
   const ext = liveExt();
   return {
-    url: `${server}/live/${urlEnc(username)}/${urlEnc(password)}/${m[1]}.${ext}`,
+    url: `${server}/live/${urlEnc(username)}/${urlEnc(password)}/${m[2]}.${ext}`,
     mime: ext === "ts" ? "video/mp2t" : "application/x-mpegURL",
   };
 }
@@ -384,12 +420,14 @@ export async function search(query) {
 
 export async function home() {
   if (!configured() && !isAuto()) return [];
+  const { server } = await ensureCred();
+  const tg = tagOf(server);
   const [cats, adult] = await Promise.all([catsRaw(), adultIds()]);
   const plain = cats.filter((c) => !adult.has(String(c.category_id)) && ID.test(String(c.category_id))).slice(0, 4);
   const rows = await Promise.all(plain.map(async (c) => {
     try {
-      const all = await memCache("live:" + c.category_id, TTL_CH, () => lst("get_live_streams", { category_id: c.category_id }));
-      const items = all.slice(0, 20).map((ch) => liveItem(buildChannel(ch, adult)));
+      const all = await memCache("live:" + tg + ":" + c.category_id, TTL_CH, () => lst("get_live_streams", { category_id: c.category_id }));
+      const items = all.slice(0, 20).map((ch) => liveItem(buildChannel(ch, adult, tg)));
       if (!items.length) return null;
       return { id: "lc" + safeId(c.category_id), title: clean(c.category_name, c.category_id, 100), items, genre: genreOf(c.category_name) };
     } catch (e) { kino.log("home: " + (e && e.code)); return null; }
