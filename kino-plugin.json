@@ -1,12 +1,14 @@
 {
   "id": "antena",
   "name": "Antena",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "apiVersion": 6,
   "entry": "plugin.js",
   "description": "Tu TV en vivo: canales y guía de programación desde cualquier servidor Xtream Codes.",
   "hosts": [
-    "raw.githubusercontent.com"
+    "raw.githubusercontent.com",
+    { "host": "redworld.pro", "insecureHttp": true },
+    { "host": "myultratv.com", "insecureHttp": true }
   ],
   "capabilities": ["channels", "home", "search", "resolve"],
   "liveStreamHosts": "any",
