@@ -1,7 +1,7 @@
 {
   "id": "antena",
   "name": "Antena",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "apiVersion": 6,
   "entry": "plugin.js",
   "description": "Tu TV en vivo: canales y guía de programación desde cualquier servidor Xtream Codes.",
@@ -34,7 +34,7 @@
         { "value": "auto", "label": "Automático (recomendado)" },
         { "value": "custom", "label": "Mi propio servidor" }
       ],
-      "hint": "Automático usa servidores preconfigurados. Con tu propio servidor introduce los datos abajo."
+      "hint": "Automático usa servidores incluidos. Propio: llena los datos abajo."
     },
     {
       "key": "serverSection",
