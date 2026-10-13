@@ -1,0 +1,62 @@
+{
+  "id": "antena",
+  "name": "Antena",
+  "version": "0.2.0",
+  "apiVersion": 6,
+  "entry": "plugin.js",
+  "description": "Tu TV en vivo: canales y guía de programación desde cualquier servidor Xtream Codes.",
+  "hosts": [],
+  "capabilities": ["channels", "home", "search", "resolve"],
+  "liveStreamHosts": "any",
+  "categories": ["live"],
+  "color": "#1A73E8",
+  "settings": [
+    {
+      "key": "serverSection",
+      "type": "section",
+      "label": "Servidor"
+    },
+    {
+      "key": "server",
+      "type": "url",
+      "label": "URL del servidor",
+      "hint": "Ejemplo: http://miiptv.com:8880"
+    },
+    {
+      "key": "username",
+      "type": "text",
+      "label": "Usuario"
+    },
+    {
+      "key": "password",
+      "type": "password",
+      "label": "Contraseña"
+    },
+    {
+      "key": "liveFormat",
+      "type": "select",
+      "label": "Formato de los canales",
+      "default": "m3u8",
+      "options": [
+        { "value": "m3u8", "label": "HLS (m3u8)" },
+        { "value": "ts", "label": "MPEG-TS (ts)" }
+      ],
+      "hint": "Si un canal no abre, prueba el otro formato."
+    },
+    {
+      "key": "statusSection",
+      "type": "section",
+      "label": "Estado"
+    },
+    {
+      "key": "accountStatus",
+      "type": "status",
+      "label": "Cuenta"
+    },
+    {
+      "key": "checkConn",
+      "type": "action",
+      "label": "Verificar conexión"
+    }
+  ]
+}
