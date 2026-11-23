@@ -1,18 +1,32 @@
 {
   "id": "antena",
   "name": "Antena",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "apiVersion": 6,
   "entry": "plugin.js",
   "description": "Tu TV en vivo: canales y guía de programación desde cualquier servidor Xtream Codes.",
   "hosts": [
     "raw.githubusercontent.com",
-    { "host": "redworld.pro", "insecureHttp": true },
-    { "host": "myultratv.com", "insecureHttp": true }
+    {
+      "host": "redworld.pro",
+      "insecureHttp": true
+    },
+    {
+      "host": "myultratv.com",
+      "insecureHttp": true
+    }
   ],
-  "capabilities": ["channels", "home", "search", "resolve"],
+  "capabilities": [
+    "channels",
+    "home",
+    "search",
+    "resolve"
+  ],
   "liveStreamHosts": "any",
-  "categories": ["live"],
+  "streamHosts": "any",
+  "categories": [
+    "live"
+  ],
   "color": "#1A73E8",
   "discoverable": false,
   "secrets": {
@@ -34,8 +48,14 @@
       "label": "Fuente del servidor",
       "default": "auto",
       "options": [
-        { "value": "auto", "label": "Automático (recomendado)" },
-        { "value": "custom", "label": "Mi propio servidor" }
+        {
+          "value": "auto",
+          "label": "Automático (recomendado)"
+        },
+        {
+          "value": "custom",
+          "label": "Mi propio servidor"
+        }
       ],
       "hint": "Automático usa servidores incluidos. Propio: llena los datos abajo."
     },
@@ -66,8 +86,14 @@
       "label": "Formato de los canales",
       "default": "m3u8",
       "options": [
-        { "value": "m3u8", "label": "HLS (m3u8)" },
-        { "value": "ts", "label": "MPEG-TS (ts)" }
+        {
+          "value": "m3u8",
+          "label": "HLS (m3u8)"
+        },
+        {
+          "value": "ts",
+          "label": "MPEG-TS (ts)"
+        }
       ],
       "hint": "Si un canal no abre, prueba el otro formato."
     },
